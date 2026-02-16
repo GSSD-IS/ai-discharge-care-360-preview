@@ -14,18 +14,18 @@ datasource db {
 // --------------------------------------
 
 enum UserRole {
-  SUPER_ADMIN     // Platform Owner
-  TENANT_ADMIN    // Hospital Admin
-  CASE_MANAGER    // 個管師 (Key User)
-  PHYSICIAN       // 醫師
-  PHARMACIST      // 藥師
-  NURSE           // 護理師
-  THERAPIST       // 復建師
-  NUTRITIONIST    // 營養師
-  SOCIAL_WORKER   // 社工師
+  SUPER_ADMIN // Platform Owner
+  TENANT_ADMIN // Hospital Admin
+  CASE_MANAGER // 個管師 (Key User)
+  PHYSICIAN // 醫師
+  PHARMACIST // 藥師
+  NURSE // 護理師
+  THERAPIST // 復建師
+  NUTRITIONIST // 營養師
+  SOCIAL_WORKER // 社工師
   HEALTH_EDUCATOR // 衛教師
-  PATIENT         // 病患
-  FAMILY          // 家屬
+  PATIENT // 病患
+  FAMILY // 家屬
 }
 
 enum SubscriptionTier {
@@ -39,6 +39,32 @@ enum TenantStatus {
   SUSPENDED
 }
 
+enum CollaborationParticipantRole {
+  PATIENT
+  FAMILY
+  AGENCY_MEMBER
+  CASE_MANAGER
+  PHYSICIAN
+  NURSE
+  SYSTEM_BOT
+}
+
+enum CollaborationTaskStatus {
+  PENDING
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 // --------------------------------------
 // IDENTITY LAYER (Multi-Tenancy)
 // --------------------------------------
@@ -46,46 +72,50 @@ enum TenantStatus {
 // Global User (Identity Provider)
 // 一個使用者可以擁有多個 Hospital 身份
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  passwordHash  String    @map("password_hash")
-  fullName      String    @map("full_name")
-  
+  id           String @id @default(uuid())
+  email        String @unique
+  passwordHash String @map("password_hash")
+  fullName     String @map("full_name")
+
   // Profile info
-  phone         String?
-  avatarUrl     String?   @map("avatar_url")
-  
+  phone     String?
+  avatarUrl String? @map("avatar_url")
+
   // System Metadata
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  memberships   TenantMember[]
+  memberships TenantMember[]
 
   @@map("users")
 }
 
 // Tenant (Hospital/Organization)
 model Tenant {
-  id            String    @id @default(uuid())
-  name          String
-  slug          String    @unique // for subdomain or url path
-  
+  id   String @id @default(uuid())
+  name String
+  slug String @unique // for subdomain or url path
+
   // Subscription
-  tier          SubscriptionTier @default(BASIC)
-  status        TenantStatus     @default(ACTIVE)
+  tier   SubscriptionTier @default(BASIC)
+  status TenantStatus     @default(ACTIVE)
 
   // White-Label Config (Logo, Colors, etc.)
-  config        Json?     // { themeColor: "#0ea5e9", logoUrl: "..." }
+  config Json? // { themeColor: "#0ea5e9", logoUrl: "..." }
 
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  members       TenantMember[]
-  workflows     WorkflowDefinition[]
-  patients      Patient[]
-  forms         FormDefinition[]
+  members             TenantMember[]
+  workflows           WorkflowDefinition[]
+  patients            Patient[]
+  forms               FormDefinition[]
+  lineAccounts        LineAccount[]
+  collaborationTasks  CollaborationTask[]
+  collaborationEvents CollaborationEvent[]
+  incidentReports     IncidentReport[]
 
   @@map("tenants")
 }
@@ -93,19 +123,19 @@ model Tenant {
 // The link between User and Tenant
 // This defines "Who are you in THIS hospital?"
 model TenantMember {
-  id            String    @id @default(uuid())
-  
-  userId        String    @map("user_id")
-  user          User      @relation(fields: [userId], references: [id])
-  
-  tenantId      String    @map("tenant_id")
-  tenant        Tenant    @relation(fields: [tenantId], references: [id])
-  
-  // Role in THIS specific tenant
-  role          UserRole  @default(CASE_MANAGER)
+  id String @id @default(uuid())
 
-  isActive      Boolean   @default(true) @map("is_active")
-  joinedAt      DateTime  @default(now()) @map("joined_at")
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  // Role in THIS specific tenant
+  role UserRole @default(CASE_MANAGER)
+
+  isActive Boolean  @default(true) @map("is_active")
+  joinedAt DateTime @default(now()) @map("joined_at")
 
   @@unique([userId, tenantId]) // User can only join a tenant once
   @@map("tenant_members")
@@ -117,24 +147,24 @@ model TenantMember {
 
 // User-Defined Workflow per Tenant
 model WorkflowDefinition {
-  id            String    @id @default(uuid())
-  
-  tenantId      String    @map("tenant_id")
-  tenant        Tenant    @relation(fields: [tenantId], references: [id])
-  
-  name          String
-  description   String?
-  
+  id String @id @default(uuid())
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  name        String
+  description String?
+
   // The Graph: Nodes (States) & Edges (Transitions)
   // Saved as JSON to allow flexible React Flow usage
   // Structure: { nodes: [...], edges: [...] }
-  definition    Json
-  
-  isPublished   Boolean   @default(false) @map("is_published")
-  version       Int       @default(1)
-  
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  definition Json
+
+  isPublished Boolean @default(false) @map("is_published")
+  version     Int     @default(1)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   patientCurrentStates Patient[] // Patients currently in this workflow
@@ -147,36 +177,40 @@ model WorkflowDefinition {
 // --------------------------------------
 
 model Patient {
-  id            String    @id @default(uuid())
-  
-  tenantId      String    @map("tenant_id")
-  tenant        Tenant    @relation(fields: [tenantId], references: [id])
+  id String @id @default(uuid())
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
 
   // Basics
-  mrn           String    // Medical Record Number (Chart No)
-  name          String
-  dob           DateTime? // Date of Birth
-  gender        String?
-  
+  mrn    String // Medical Record Number (Chart No)
+  name   String
+  dob    DateTime? // Date of Birth
+  gender String?
+
   // Workflow State
   // Points to the Active Workflow and Current Node
-  activeWorkflowId String?   @map("active_workflow_id")
+  activeWorkflowId String?             @map("active_workflow_id")
   activeWorkflow   WorkflowDefinition? @relation(fields: [activeWorkflowId], references: [id])
-  
+
   currentStatusNodeId String? @map("current_status_node_id") // ID within the JSON
 
   // Risk Score (Calculated by AI)
-  riskScore     Float?    @map("risk_score") // 0-100
-  riskLevel     String?   @map("risk_level") // HIGH, MEDIUM, LOW
+  riskScore Float?  @map("risk_score") // 0-100
+  riskLevel String? @map("risk_level") // HIGH, MEDIUM, LOW
 
   // Admission Info
   admissionDate DateTime  @map("admission_date")
   dischargeDate DateTime? @map("discharge_date")
 
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  
-  formSubmissions FormSubmission[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  formSubmissions     FormSubmission[]
+  lineAccounts        LineAccount[]
+  collaborationTasks  CollaborationTask[]
+  collaborationEvents CollaborationEvent[]
+  incidentReports     IncidentReport[]
 
   @@unique([tenantId, mrn])
   @@map("patients")
@@ -188,47 +222,145 @@ model Patient {
 
 // Form Definition (JSON-based schema)
 model FormDefinition {
-  id            String   @id @default(uuid())
-  
-  tenantId      String   @map("tenant_id")
-  tenant        Tenant   @relation(fields: [tenantId], references: [id])
-  
-  name          String
-  description   String?
-  
+  id String @id @default(uuid())
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  name        String
+  description String?
+
   // JSON Schema defining form fields
   // { fields: [{ id, type, label, required, options?, validation? }] }
-  definition    Json
-  
+  definition Json
+
   // Which workflow nodes this form is bound to
-  nodeBindings  String[] @map("node_bindings")
-  
-  isTemplate    Boolean  @default(false) @map("is_template")
-  
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  
-  submissions   FormSubmission[]
-  
+  nodeBindings String[] @map("node_bindings")
+
+  isTemplate Boolean @default(false) @map("is_template")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  submissions FormSubmission[]
+
   @@map("form_definitions")
 }
 
 // Form Submission (Patient/Staff submitted data)
 model FormSubmission {
-  id            String   @id @default(uuid())
-  
-  formId        String   @map("form_id")
-  form          FormDefinition @relation(fields: [formId], references: [id])
-  
-  patientId     String   @map("patient_id")
-  patient       Patient  @relation(fields: [patientId], references: [id])
-  
-  submittedById String   @map("submitted_by_id")
-  
+  id String @id @default(uuid())
+
+  formId String         @map("form_id")
+  form   FormDefinition @relation(fields: [formId], references: [id])
+
+  patientId String  @map("patient_id")
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  submittedById String @map("submitted_by_id")
+
   // The actual submitted data
-  data          Json
-  
-  createdAt     DateTime @default(now()) @map("created_at")
-  
+  data Json
+
+  createdAt DateTime @default(now()) @map("created_at")
+
   @@map("form_submissions")
+}
+
+// --------------------------------------
+// LINE COLLABORATION HUB
+// --------------------------------------
+
+model LineAccount {
+  id String @id @default(uuid())
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  patientId String?  @map("patient_id")
+  patient   Patient? @relation(fields: [patientId], references: [id])
+
+  role        CollaborationParticipantRole
+  displayName String?                      @map("display_name")
+  lineUserId  String                       @map("line_user_id")
+
+  linkedAt   DateTime  @default(now()) @map("linked_at")
+  unlinkedAt DateTime? @map("unlinked_at")
+
+  @@unique([tenantId, lineUserId])
+  @@index([tenantId, patientId])
+  @@map("line_accounts")
+}
+
+model CollaborationTask {
+  id String @id @default(uuid())
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  patientId String?  @map("patient_id")
+  patient   Patient? @relation(fields: [patientId], references: [id])
+
+  externalOrgName String                  @map("external_org_name")
+  title           String
+  description     String?
+  status          CollaborationTaskStatus @default(PENDING)
+  dueAt           DateTime?               @map("due_at")
+  acceptedAt      DateTime?               @map("accepted_at")
+  completedAt     DateTime?               @map("completed_at")
+  metadata        Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  events CollaborationEvent[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, patientId])
+  @@map("collaboration_tasks")
+}
+
+model CollaborationEvent {
+  id String @id @default(uuid())
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  patientId String?  @map("patient_id")
+  patient   Patient? @relation(fields: [patientId], references: [id])
+
+  taskId String?            @map("task_id")
+  task   CollaborationTask? @relation(fields: [taskId], references: [id])
+
+  actorRole CollaborationParticipantRole @map("actor_role")
+  eventType String                       @map("event_type")
+  payload   Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, patientId, createdAt])
+  @@index([tenantId, eventType])
+  @@map("collaboration_events")
+}
+
+model IncidentReport {
+  id String @id @default(uuid())
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  patientId String  @map("patient_id")
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  reporterRole CollaborationParticipantRole @map("reporter_role")
+  incidentType String                       @map("incident_type")
+  severity     IncidentSeverity
+  description  String?
+  source       String                       @default("LINE")
+  rawPayload   Json?                        @map("raw_payload")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, patientId, severity])
+  @@map("incident_reports")
 }
