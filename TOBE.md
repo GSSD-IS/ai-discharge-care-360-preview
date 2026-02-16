@@ -103,3 +103,59 @@
     - 病患端: Line Login + LIFF 查看衛教。
 - **Advanced AI**: 
     - 導入 LLM 進行病歷摘要 (Discharge Summary) 自動生成。
+
+---
+
+## 7. New Requirement: Line 官方帳號跨域協作 (Patient / Family / External Agencies)
+
+### 7.1 Requirement Summary
+新增「Line 官方帳號協作中樞」作為病患、家屬與外部機構（如 A 單位、居服單位、復能機構、交通接送）之共同協作入口。
+
+目標：
+- 讓病患/家屬以最熟悉的通訊工具回報出院後狀態。
+- 讓外部機構可在授權範圍內接收任務、回覆進度、上傳服務完成資訊。
+- 讓醫院端在同一個 Case Timeline 檢視跨機構互動紀錄，形成可追蹤閉環。
+
+### 7.2 Scope Definition
+- **Channel**: Line Official Account (OA) 為唯一對外通訊入口。
+- **Identity**: 支援 Line Login 與本系統病患/家屬/外部機構帳號綁定。
+- **Conversation Types**:
+  1. 病患/家屬 <-> 醫院照護團隊（衛教、提醒、異常回報）。
+  2. 醫院照護團隊 <-> 外部機構（派案、接案、服務完成確認）。
+  3. 系統 Bot 廣播（回診提醒、用藥提醒、量測提醒）。
+
+### 7.3 Core Collaboration Flows
+1. **衛教與任務推送**：出院後自動推送個人化衛教、回診提醒與每日任務（如量血壓）。
+2. **異常事件回報**：家屬透過選單快速回報「跌倒 / 發燒 / 呼吸喘」，系統寫入事件並通知個管師。
+3. **外部機構接案**：外部機構在 OA 接收任務卡（服務類型、時限、聯絡資訊），可一鍵回覆「已接案 / 無法承接」。
+4. **服務完成回傳**：機構回傳服務完成時間、備註與附件（如服務照片/簽收），更新至 Case Timeline。
+5. **升級機制**：若回報內容符合高風險條件，系統觸發紅色警示並通知院內醫師/個管師。
+
+### 7.4 Permission & Data Governance
+- 以 `tenant_id + case_id + participant_role` 控制資料可見範圍。
+- 家屬僅能查看已授權病患資料；外部機構僅能查看其被派案任務內容。
+- 所有 Line 互動須保留稽核軌跡（訊息時間、發送者、任務狀態變更）。
+- 敏感資料最小揭露：Line 訊息預設不推送完整病歷，僅提供必要摘要與導向連結。
+
+### 7.5 MVP Deliverables
+- 建立 Line OA webhook 接收與簽章驗證。
+- 建立 Line 帳號綁定流程（Patient/Family/Agency）。
+- 建立 3 類 Bot 能力：通知、Quick Reply、任務狀態回覆。
+- 建立外部機構任務看板（受派案件、進行中、已完成）。
+- 建立跨通道 Timeline（院內系統 + Line 事件整併）。
+
+
+### 7.6 Database Strategy (Line 協作資料模型)
+為避免跨租戶/跨角色資料外洩，Line 協作資料採「同租戶隔離 + 事件溯源」設計：
+
+- `line_accounts`：儲存 OA 使用者與平台身份綁定（patient/family/agency）。
+- `collaboration_tasks`：跨機構派案主表（接案、完案、拒案狀態）。
+- `collaboration_events`：所有訊息與狀態變更事件（可回放 Timeline）。
+- `incident_reports`：家屬/病患異常回報（跌倒、發燒等），提供風險規則判定。
+
+設計原則：
+1. **Tenant First**：所有表皆帶 `tenant_id` 並建立索引，查詢必帶租戶條件。
+2. **Case Binding**：以 `patient_id` 串接院內病例，保障跨通道追蹤一致性。
+3. **Auditability**：關鍵互動不覆蓋更新，採事件追加，確保稽核可追溯。
+4. **Minimal Disclosure**：Line 只存協作必要資訊，敏感病歷仍留在院內核心資料域。
+5. **Supabase First**：資料庫先落地於 Supabase Postgres，使用 migration 版本化管理 schema。

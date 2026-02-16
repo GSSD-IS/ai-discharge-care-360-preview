@@ -147,4 +147,21 @@
 - [x] Ensure `AdminLayout` and `LoginPage` are fully localized (Traditional Chinese).
 - [x] Verify no hardcoded English strings in key SaaS user flows.
 
+
+## Phase 10: Line 官方帳號跨域協作 (LINE Collaboration Hub)
+- [ ] **10.1 LINE 官方帳號整合** <!-- id: 10.1 -->
+    - [ ] 建立 LINE OA Channel 與 Webhook 驗章機制。
+    - [ ] 實作 Line Login 與病患/家屬/外部機構帳號綁定。
+    - [ ] 建立 Prisma Migration：`line_accounts`, `collaboration_tasks`, `collaboration_events`, `incident_reports`。
+    - [ ] 在 Supabase (staging/prod) 套用 migration，完成連線與權限驗證。
+
+- [ ] **10.2 協作任務中心** <!-- id: 10.2 -->
+    - [x] 建立任務 API 基線：建立任務、接案、完案與狀態查詢。
+    - [ ] 建立外部機構接案/完案流程（Quick Reply + 任務回傳）。
+    - [ ] 建立跨通道 Case Timeline（院內操作 + LINE 互動 + 外部機構回報）。
+
+- [ ] **10.3 風險事件閉環** <!-- id: 10.3 -->
+    - [ ] 家屬異常回報（跌倒/發燒/未服藥）接入風險規則。
+    - [ ] 觸發紅燈警示並通知個管師/醫師，記錄稽核軌跡。
+
 **[System]**: TERMINATE.

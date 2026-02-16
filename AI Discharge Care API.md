@@ -33,6 +33,53 @@
 • 交通接送公版預約服務 API：
     ◦ 功能：衛福部釋出系統程式碼與 API 給地方政府。
     ◦ 目的：整合多元車隊（長照專車、通用計程車），提供即時預約與共乘媒合服務。
+• LINE Messaging API / LINE Login API：
+    ◦ 功能：整合 LINE 官方帳號 (OA) 作為病患、家屬與外部機構的協作入口，支援 webhook 事件接收、推播、Quick Reply 與登入綁定。
+    ◦ 目的：建立「醫院端 — 家屬端 — 外部機構端」的即時協同閉環，降低跨機構溝通延遲與資訊斷點。
+
+4. LINE 協作 API 設計補充 (Collaboration APIs)
+為支援新需求，建議新增以下內部 API：
+
+• `POST /api/line/webhook`
+    ◦ 功能：接收 LINE webhook 事件 (message, postback, follow/unfollow)。
+    ◦ 重點：驗證 `x-line-signature`，寫入 `collaboration_events`。
+
+• `POST /api/line/link`
+    ◦ 功能：綁定 LINE User ID 與平台身份 (patient/family/agency_member)。
+    ◦ 重點：綁定需具一次性 token + 過期機制，避免冒名綁定。
+
+• `POST /api/collaboration/tasks/:id/accept`
+    ◦ 功能：外部機構接案。
+
+• `POST /api/collaboration/tasks/:id/complete`
+    ◦ 功能：外部機構回傳服務完成資訊（時間、備註、附件）。
+
+• `POST /api/line/tasks`
+    ◦ 功能：建立外部機構協作任務（如接送、居服、復能）。
+
+• `POST /api/line/tasks/:taskId/accept`
+    ◦ 功能：外部機構接案並回寫狀態。
+
+• `POST /api/line/tasks/:taskId/complete`
+    ◦ 功能：外部機構完案回傳，更新狀態與時間軸。
+
+• `POST /api/line/incidents`
+    ◦ 功能：病患/家屬/照護團隊回報異常事件（跌倒、發燒、未服藥等）。
+    ◦ 重點：建立 `incident_reports` 並同步寫入 `collaboration_events`，供時間軸追蹤與警示規則判定。
+
+• `GET /api/line/progress/:patientId`
+    ◦ 功能：取得病患目前進度、下一步、關懷與隱私保護建議，供 LINE Bot 即時回覆家屬/病患。
+    ◦ 重點：僅輸出必要摘要並附隱私/防入侵提醒，避免敏感資料外洩。
+
+• `GET /api/line/timeline/:patientId`
+    ◦ 功能：取得病患跨通道時間軸（院內操作紀錄 + LINE 互動 + 外部機構回報）。
+
+建議資料表（MVP）：
+- `line_accounts`：儲存 LINE 身分綁定關聯。
+- `collaboration_tasks`：跨機構任務。
+- `collaboration_events`：訊息與狀態事件稽核。
+- `incident_reports`：病患/家屬異常回報。
+
 總結圖表
 |介接對象|關鍵 API / 系統名稱|資料流向|核心用途|
 |衛福部|照管資訊系統|雙向 (上傳/接收)|CMS 評估、簡易計畫轉介、派案狀態追蹤|
@@ -41,3 +88,4 @@
 |民間廠商|輔具租賃 API|雙向|智慧輔具庫存查詢、租賃媒合|
 |第三方 App|長照 SDK|單向 (下載)|民眾授權下，釋出資料給健康管理 App|
 |認證中心|OETH/FIDO|雙向|醫事人員身分驗證與電子簽章|
+|LINE 平台|Messaging API / Login API|雙向 (事件/推播)|病患、家屬、外部機構協作與回報|
